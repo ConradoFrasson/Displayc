@@ -50,34 +50,44 @@ def get_simulated_data():
         }
     }
 
-# --- Placeholder for Car Diagram ---
-def draw_car_placeholder(surface, x, y, width, height):
-    """Draws a simple rectangle as a placeholder for the car diagram."""
-    # NOTE: A custom font was not downloadable, using default.
-    pygame.draw.rect(surface, LIGHT_GRAY, (x, y, width, height), 2)
-    font = pygame.font.Font(None, 24)
-    text = font.render("Car Diagram Placeholder", True, LIGHT_GRAY)
-    text_rect = text.get_rect(center=(x + width / 2, y + height / 2))
-    surface.blit(text, text_rect)
-
 # --- UI Drawing Functions ---
-def draw_static_elements(surface):
-    """Draws all the static text and UI outlines."""
+def draw_separators(surface):
+    """Draws the separator lines."""
+    # Main vertical
+    pygame.draw.line(surface, WHITE, (350, 100), (350, 700), 2)
+    # Main horizontal
+    pygame.draw.line(surface, WHITE, (350, 500), (1280, 500), 2)
+    # Center horizontal
+    pygame.draw.line(surface, WHITE, (350, 250), (900, 250), 2)
+    # Center vertical
+    pygame.draw.line(surface, WHITE, (900, 100), (900, 500), 2)
+
+def draw_soc(surface, data):
+    """Draws the SOC bar and power reading."""
     font_medium = pygame.font.Font(None, 50)
     font_small = pygame.font.Font(None, 30)
-    font_very_small = pygame.font.Font(None, 20)
-
-    # RPM and Speed Labels
-    rpm_label = font_small.render("RPM", True, WHITE)
-    surface.blit(rpm_label, (640 - rpm_label.get_width() // 2, 220))
-    kmh_label = font_small.render("Km/h", True, WHITE)
-    surface.blit(kmh_label, (640 - kmh_label.get_width() // 2, 420))
-    endurance_label = font_very_small.render("Endurance Mode", True, ORANGE)
-    surface.blit(endurance_label, (640 - endurance_label.get_width() // 2, 450))
 
     # SOC Label
     soc_label = font_medium.render("SOC", True, WHITE)
-    surface.blit(soc_label, (150, 600))
+    surface.blit(soc_label, (640 - soc_label.get_width() // 2, 550))
+
+    # SOC Bar
+    soc_width = (data['soc'] / 100) * 300
+    soc_color = RED
+    if data['soc'] > 75:
+        soc_color = BLUE
+    elif data['soc'] > 50:
+        soc_color = GREEN
+    elif data['soc'] > 25:
+        soc_color = YELLOW
+    pygame.draw.rect(surface, soc_color, (640 - 150, 605, soc_width, 30))
+    pygame.draw.rect(surface, WHITE, (640 - 150, 605, 300, 30), 2)
+    power_text = font_small.render(f"{data['power']:.1f}kW", True, WHITE)
+    surface.blit(power_text, (640 + 160, 605))
+
+def draw_lap_times(surface, data):
+    """Draws the lap times."""
+    font_small = pygame.font.Font(None, 30)
 
     # Lap Times Labels
     lap_title = font_small.render("Melhor volta", True, GREEN)
@@ -87,19 +97,13 @@ def draw_static_elements(surface):
     lap_curr_title = font_small.render("Volta Atual", True, BLUE)
     surface.blit(lap_curr_title, (950, 650))
 
-    # A/F Label
-    af_label = font_small.render("A F", True, WHITE)
-    surface.blit(af_label, (1150, 280))
-
-    # --- Separators ---
-    # Main vertical
-    pygame.draw.line(surface, WHITE, (350, 100), (350, 700), 2)
-    # Main horizontal
-    pygame.draw.line(surface, WHITE, (350, 500), (1280, 500), 2)
-    # Center horizontal
-    pygame.draw.line(surface, WHITE, (350, 250), (900, 250), 2)
-    # Center vertical
-    pygame.draw.line(surface, WHITE, (900, 100), (900, 500), 2)
+    # Lap Times
+    best_lap = font_small.render(data['lap_times']['best'], True, GREEN)
+    surface.blit(best_lap, (1100, 550))
+    prev_lap = font_small.render(data['lap_times']['previous'], True, WHITE)
+    surface.blit(prev_lap, (1100, 600))
+    curr_lap = font_small.render(data['lap_times']['current'], True, BLUE)
+    surface.blit(curr_lap, (1100, 650))
 
 def draw_throttle_brake_bars(surface, data):
     """Draws the throttle and brake bars."""
@@ -124,21 +128,20 @@ def draw_status_box(surface, data):
         pygame.draw.rect(surface, status_colors.get(status, GRAY), (200, y_offset, 100, 30))
         y_offset += 40
 
-def draw_dynamic_data(surface, data):
-    """Draws all the dynamic data that changes each frame."""
-    font_large = pygame.font.Font(None, 150)
-    font_small = pygame.font.Font(None, 30)
+def draw_temp_gauges(surface, data):
+    """Draws the temperature gauges."""
+    # BAT
+    bat_temp_height = (data['bat_temp'] / 100) * 150
+    pygame.draw.rect(surface, RED, (950, 250 - bat_temp_height, 50, bat_temp_height))
+    pygame.draw.rect(surface, WHITE, (950, 100, 50, 150), 2)
+    # MOT
+    mot_temp_height = (data['mot_temp'] / 150) * 150
+    pygame.draw.rect(surface, YELLOW, (1050, 250 - mot_temp_height, 50, mot_temp_height))
+    pygame.draw.rect(surface, WHITE, (1050, 100, 50, 150), 2)
+
+def draw_tire_data(surface, data):
+    """Draws the tire data."""
     font_very_small = pygame.font.Font(None, 24)
-
-    # RPM and Speed
-    rpm_text = font_large.render(f"{data['rpm']}", True, RED)
-    rpm_rect = rpm_text.get_rect(center=(640, 150))
-    surface.blit(rpm_text, rpm_rect)
-    speed_text = font_large.render(f"{data['speed']}", True, WHITE)
-    speed_rect = speed_text.get_rect(center=(640, 350))
-    surface.blit(speed_text, speed_rect)
-
-    # Tire Data
     tire_positions = {'FL': (50, 150), 'FR': (250, 150), 'RL': (50, 450), 'RR': (250, 450)}
     for pos, (x, y) in tire_positions.items():
         temp_text = font_very_small.render(f"{data['tires'][pos]['temp']}°C", True, WHITE)
@@ -148,35 +151,27 @@ def draw_dynamic_data(surface, data):
         surface.blit(psi_text, (x, y + 20))
         surface.blit(wear_text, (x, y + 40))
 
-    # Temp Gauges
-    bat_temp_height = (data['bat_temp'] / 100) * 150
-    pygame.draw.rect(surface, RED, (950, 250 - bat_temp_height, 50, bat_temp_height))
-    pygame.draw.rect(surface, WHITE, (950, 100, 50, 150), 2)
-    mot_temp_height = (data['mot_temp'] / 150) * 150
-    pygame.draw.rect(surface, YELLOW, (1050, 250 - mot_temp_height, 50, mot_temp_height))
-    pygame.draw.rect(surface, WHITE, (1050, 100, 50, 150), 2)
+def draw_rpm_speed(surface, data):
+    """Draws the RPM and Speed readouts and RPM lights."""
+    font_large = pygame.font.Font(None, 150)
+    font_small = pygame.font.Font(None, 30)
+    font_very_small = pygame.font.Font(None, 20)
 
-    # SOC Bar
-    soc_width = (data['soc'] / 100) * 300
-    soc_color = RED
-    if data['soc'] > 75:
-        soc_color = BLUE
-    elif data['soc'] > 50:
-        soc_color = GREEN
-    elif data['soc'] > 25:
-        soc_color = YELLOW
-    pygame.draw.rect(surface, soc_color, (250, 605, soc_width, 30))
-    pygame.draw.rect(surface, WHITE, (250, 605, 300, 30), 2)
-    power_text = font_small.render(f"{data['power']:.1f}kW", True, WHITE)
-    surface.blit(power_text, (560, 605))
+    # RPM and Speed Labels
+    rpm_label = font_small.render("RPM", True, WHITE)
+    surface.blit(rpm_label, (640 - rpm_label.get_width() // 2, 220))
+    kmh_label = font_small.render("Km/h", True, WHITE)
+    surface.blit(kmh_label, (640 - kmh_label.get_width() // 2, 420))
+    endurance_label = font_very_small.render("Endurance Mode", True, ORANGE)
+    surface.blit(endurance_label, (640 - endurance_label.get_width() // 2, 450))
 
-    # Lap Times
-    best_lap = font_small.render(data['lap_times']['best'], True, GREEN)
-    surface.blit(best_lap, (1100, 550))
-    prev_lap = font_small.render(data['lap_times']['previous'], True, WHITE)
-    surface.blit(prev_lap, (1100, 600))
-    curr_lap = font_small.render(data['lap_times']['current'], True, BLUE)
-    surface.blit(curr_lap, (1100, 650))
+    # RPM and Speed
+    rpm_text = font_large.render(f"{data['rpm']}", True, RED)
+    rpm_rect = rpm_text.get_rect(center=(640, 150))
+    surface.blit(rpm_text, rpm_rect)
+    speed_text = font_large.render(f"{data['speed']}", True, WHITE)
+    speed_rect = speed_text.get_rect(center=(640, 350))
+    surface.blit(speed_text, speed_rect)
 
     # RPM Lights
     rpm_ratio = data['rpm'] / 12000
@@ -205,11 +200,16 @@ def main():
 
         data = get_simulated_data()
         screen.fill(BLACK)
-        draw_static_elements(screen)
-        draw_dynamic_data(screen, data)
-        draw_car_placeholder(screen, 50, 100, 250, 400)
+
+        draw_separators(screen)
+        draw_rpm_speed(screen, data)
+        draw_tire_data(screen, data)
+        draw_temp_gauges(screen, data)
         draw_status_box(screen, data)
         draw_throttle_brake_bars(screen, data)
+        draw_soc(screen, data)
+        draw_lap_times(screen, data)
+
         pygame.display.flip()
         clock.tick(30)
 
