@@ -95,6 +95,33 @@ def draw_rpm_speed(surface, data):
             else: color = RED
         pygame.draw.circle(surface, color, (300 + i * 40, 50), 15)
 
+def draw_temp_gauges(surface, data):
+    """Draws the temperature gauges."""
+    font_small = pygame.font.Font(None, 30)
+    font_very_small = pygame.font.Font(None, 20)
+
+    # BAT
+    bat_temp_width = ((data['bat_temp'] - 20) / (80 - 20)) * 150
+    pygame.draw.rect(surface, RED, (950, 120, bat_temp_width, 50))
+    pygame.draw.rect(surface, WHITE, (950, 120, 150, 50), 2)
+    bat_label = font_small.render("BAT", True, WHITE)
+    surface.blit(bat_label, (955, 175))
+    bat_max = font_very_small.render("80°C", True, WHITE)
+    surface.blit(bat_max, (1110, 120))
+    bat_min = font_very_small.render("20°C", True, WHITE)
+    surface.blit(bat_min, (955, 100))
+
+    # MOT
+    mot_temp_width = ((data['mot_temp'] - 20) / (110 - 20)) * 150
+    pygame.draw.rect(surface, YELLOW, (950, 200, mot_temp_width, 50))
+    pygame.draw.rect(surface, WHITE, (950, 200, 150, 50), 2)
+    mot_label = font_small.render("MOT", True, WHITE)
+    surface.blit(mot_label, (955, 255))
+    mot_max = font_very_small.render("110°C", True, WHITE)
+    surface.blit(mot_max, (1110, 200))
+    mot_min = font_very_small.render("20°C", True, WHITE)
+    surface.blit(mot_min, (955, 180))
+
 def draw_tire_data(surface, data):
     """Draws the tire data."""
     font_very_small = pygame.font.Font(None, 24)
@@ -127,17 +154,17 @@ def draw_throttle_brake_bars(surface, data):
 
     # Throttle
     throttle_height = (data['throttle'] / 100) * 150
-    pygame.draw.rect(surface, GREEN, (1120, 450 - throttle_height, 50, throttle_height))
-    pygame.draw.rect(surface, WHITE, (1120, 300, 50, 150), 2)
+    pygame.draw.rect(surface, GREEN, (950, 450 - throttle_height, 50, throttle_height))
+    pygame.draw.rect(surface, WHITE, (950, 300, 50, 150), 2)
     throttle_label = font_small.render("Throttle", True, WHITE)
-    surface.blit(throttle_label, (1120, 460))
+    surface.blit(throttle_label, (950, 460))
 
     # Brake
     brake_height = (data['brake'] / 100) * 150
-    pygame.draw.rect(surface, RED, (1200, 450 - brake_height, 50, brake_height))
-    pygame.draw.rect(surface, WHITE, (1200, 300, 50, 150), 2)
+    pygame.draw.rect(surface, RED, (1050, 450 - brake_height, 50, brake_height))
+    pygame.draw.rect(surface, WHITE, (1050, 300, 50, 150), 2)
     brake_label = font_small.render("Brake", True, WHITE)
-    surface.blit(brake_label, (1200, 460))
+    surface.blit(brake_label, (1050, 460))
 
 def draw_soc(surface, data):
     """Draws the SOC bar and power reading."""
@@ -188,33 +215,9 @@ def draw_car_placeholder(surface, x, y, width, height, data):
     pygame.draw.rect(surface, LIGHT_GRAY, (x, y, width, height), 2)
     font = pygame.font.Font(None, 36)
     text = font.render("Car Diagram", True, LIGHT_GRAY)
-    text_rect = text.get_rect(center=(x + width / 2, y + 50))
+    text_rect = text.get_rect(center=(x + width / 2, y + height / 2))
     surface.blit(text, text_rect)
 
-    # Draw temp gauges inside the placeholder
-    font_small = pygame.font.Font(None, 30)
-    font_very_small = pygame.font.Font(None, 20)
-    # BAT
-    bat_temp_height = (data['bat_temp'] / 100) * 100
-    pygame.draw.rect(surface, RED, (x + 50, y + 250 - bat_temp_height, 50, bat_temp_height))
-    pygame.draw.rect(surface, WHITE, (x + 50, y + 150, 50, 100), 2)
-    bat_label = font_small.render("BAT", True, WHITE)
-    surface.blit(bat_label, (x + 55, y + 260))
-    bat_max = font_very_small.render("80°C", True, WHITE)
-    surface.blit(bat_max, (x + 55, y + 130))
-    bat_min = font_very_small.render("20°C", True, WHITE)
-    surface.blit(bat_min, (x + 55, y + 230))
-
-    # MOT
-    mot_temp_height = (data['mot_temp'] / 150) * 100
-    pygame.draw.rect(surface, YELLOW, (x + 200, y + 250 - mot_temp_height, 50, mot_temp_height))
-    pygame.draw.rect(surface, WHITE, (x + 200, y + 150, 50, 100), 2)
-    mot_label = font_small.render("MOT", True, WHITE)
-    surface.blit(mot_label, (x + 205, y + 260))
-    mot_max = font_very_small.render("110°C", True, WHITE)
-    surface.blit(mot_max, (x + 205, y + 130))
-    mot_min = font_very_small.render("20°C", True, WHITE)
-    surface.blit(mot_min, (x + 205, y + 230))
 
 # --- Main Application ---
 def main():
@@ -236,6 +239,7 @@ def main():
         draw_separators(screen)
         draw_rpm_speed(screen, data)
         draw_tire_data(screen, data)
+        draw_temp_gauges(screen, data)
         draw_status_box(screen, data)
         draw_throttle_brake_bars(screen, data)
         draw_soc(screen, data)
