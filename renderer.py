@@ -1,7 +1,7 @@
+
 import os
 import pygame
 
-# ---------- Cores ----------
 COLORS = {
     "background": (26, 26, 26),
     "white": (255, 255, 255),
@@ -31,7 +31,7 @@ def _load_image(name, size=None):
         surf = pygame.transform.smoothscale(surf, size)
     return surf
 
-# ---------- Gradiente por “stops” ----------
+#Gradiente
 TEMP_COLOR_STOPS = [
     (0.00, (0x14, 0x66, 0xFF)),
     (0.25, (0x2B, 0x8E, 0x95)),
@@ -54,7 +54,7 @@ def _color_from_stops(stops, t):
     return stops[-1][1]
 
 
-# --------- gradientes auxiliares (LEDs RPM / SOC pílulas) ----------
+#Gradientes auxiliares
 def _grad_blue_to_darkgreen(t):
     c0, c1 = (0x78, 0xFF, 0x5E), (0x1B, 0x81, 0x07)
     return _lerp_color(c0, c1, max(0.0, min(1.0, t)))
