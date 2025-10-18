@@ -2,13 +2,19 @@ import os
 import math
 import pygame
 import random
-import time
 
 # --- Constants ---
-# Colors
-BLACK = (0, 0, 0)
-WHITE = (255, 255, 255)
-RED = (255, 0, 0)
+COLORS = {
+
+"WHITE" = (255, 255, 255),
+"RED" = (255, 0, 0),
+"GREEN" = (0, 255, 0),
+"BLUE" = (0, 0, 255),
+"YELLOW" = (255, 255, 0),
+"ORANGE" = (255, 165, 0),
+"GRAY" = (128, 128, 128)
+DARK_GRAY = (40, 40, 40)
+LIGHT_GRAY = (200, 200, 200)
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 YELLOW = (255, 255, 0)
@@ -16,9 +22,11 @@ ORANGE = (255, 165, 0)
 GRAY = (128, 128, 128)
 DARK_GRAY = (40, 40, 40)
 LIGHT_GRAY = (200, 200, 200)
-
+}
 # Screen dimensions
 WIDTH, HEIGHT = 1280, 720
+
+#---paths---
 
 # --- Data Simulation ---
 def get_simulated_data():
