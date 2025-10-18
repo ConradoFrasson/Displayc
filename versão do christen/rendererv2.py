@@ -1,6 +1,5 @@
-# rendererv2.py
+# renderer.py
 import os
-import math
 import pygame
 
 # ---------- Cores ----------
@@ -14,16 +13,11 @@ COLORS = {
     "text_green": (57, 255, 20),
     "text_yellow": (255, 255, 0),
     "text_blue": (0, 191, 255),
-
-    # gradiente do mock
-    "grad_0": (0x14, 0x66, 0xFF),  # 0%
-    "grad_25": (0x2B, 0x8E, 0x95), # 25%
-    "grad_50": (0x41, 0xB6, 0x2C), # 50%
-    "grad_75": (0xBA, 0xA0, 0x17), # 75%
-    "grad_100": (0xFF, 0x00, 0x04),# 100%
-
+    "rpm_blue": (0, 128, 255), "rpm_dk_green": (0, 128, 0), "rpm_lt_green": (0, 255, 0),
+    "rpm_yellow": (255, 255, 0), "rpm_orange": (255, 128, 0), "rpm_red": (255, 0, 0),
     "pedal_green": (0, 255, 0), "pedal_red": (255, 0, 0),
-    "temp_red": (255, 7, 58),
+    "temp_blue": (0, 191, 255), "temp_green": (57, 255, 20),
+    "temp_yellow": (255, 215, 0), "temp_red": (255, 7, 58),
 }
 FONTS = {}
 IMAGES = {}
@@ -38,7 +32,7 @@ def _load_image(name, size=None):
         surf = pygame.transform.smoothscale(surf, size)
     return surf
 
-# ---------- Gradiente stops ----------
+# ---------- Gradiente por “stops” ----------
 TEMP_COLOR_STOPS = [
     (0.00, (0x14, 0x66, 0xFF)),
     (0.25, (0x2B, 0x8E, 0x95)),
@@ -60,425 +54,537 @@ def _color_from_stops(stops, t):
             return _lerp_color(c0, c1, u)
     return stops[-1][1]
 
-# ---------- Carregamento ----------
+
+# --------- gradientes auxiliares (LEDs RPM / SOC pílulas) ----------
+def _grad_blue_to_darkgreen(t):
+    c0, c1 = (0x78, 0xFF, 0x5E), (0x1B, 0x81, 0x07)
+    return _lerp_color(c0, c1, max(0.0, min(1.0, t)))
+
+def _grad_yellow_to_brown(t):
+    c0, c1 = (0xFF, 0xDE, 0x2C), (0x70, 0x5E, 0x01)
+    return _lerp_color(c0, c1, max(0.0, min(1.0, t)))
+
+def _grad_red_to_darkred(t):
+    c0, c1 = (0xFF, 0x38, 0x3C), (0x67, 0x02, 0x04)
+    return _lerp_color(c0, c1, max(0.0, min(1.0, t)))
+
+def _grad_red_yellow_green_pos(frac):
+    # 0 -> vermelho (#FF0000), ~0.394 -> amarelo (#FFD900), 1 -> verde (#41B62C)
+    if frac <= 0.394231:
+        u = frac / 0.394231
+        c0, c1 = (255, 0, 0), (255, 217, 0)
+    else:
+        u = (frac - 0.394231) / (1 - 0.394231)
+        c0, c1 = (255, 217, 0), (0x41, 0xB6, 0x2C)
+    return _lerp_color(c0, c1, u)
+
+# ---------- Carregamento de assets ----------
 def load_assets():
     try:
         pygame.font.init()
-        orbit = _apath("assets","fonts","Orbitron-Bold.ttf")
-        FONTS["speed_num"]     = pygame.font.Font(orbit, 96)
-        FONTS["soc_title"]     = pygame.font.Font(orbit, 64)
-        FONTS["rpm_num"]       = pygame.font.Font(orbit, 64)
-        FONTS["speed_unit"]    = pygame.font.Font(orbit, 36)
-        FONTS["rpm_unit"]      = pygame.font.Font(orbit, 24)
-        FONTS["pedal_letters"] = pygame.font.Font(orbit, 24)
-        FONTS["lap_num"]       = pygame.font.Font(orbit, 20)
-        FONTS["soc_num"]       = pygame.font.Font(orbit, 20)
-        FONTS["tyre_loc"]      = pygame.font.Font(orbit, 16)
-        FONTS["temp_value"]    = pygame.font.Font(orbit, 16)
-        FONTS["alert_text"]    = pygame.font.Font(orbit, 16)
-        FONTS["lap_title"]     = pygame.font.Font(orbit, 14)
-        FONTS["speed_mode"]    = pygame.font.Font(orbit, 24)  # modo dentro do círculo
-        FONTS["tyre_info"]     = pygame.font.Font(orbit, 20)
-        FONTS["temp_labels"]   = pygame.font.Font(orbit, 14)
+        FONTS["speed_num"]     = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 140)
+        FONTS["soc_title"]     = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 64)
+        FONTS["rpm_num"]       = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 80)
+        FONTS["speed_unit"]    = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 36)
+        FONTS["rpm_unit"]      = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 24)
+        FONTS["pedal_letters"] = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 24)
+        FONTS["lap_num"]       = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 20)
+        FONTS["soc_num"]       = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 20)
+        FONTS["tyre_loc"]      = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 16)
+        FONTS["temp_value"]    = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 16)
+        FONTS["alert_text"]    = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 16)
+        FONTS["lap_title"]     = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 14)
+        FONTS["speed_mode"]    = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 14)
+        FONTS["tyre_info"]     = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 14)
+        FONTS["temp_labels"]   = pygame.font.Font(_apath("assets","fonts","Orbitron-Bold.ttf"), 12)
 
-        # Imagens
-        IMAGES["battery_temp"]  = _load_image("icon_battery_temp.png", (24, 24))
-        IMAGES["engine_temp"]   = _load_image("icon_engine_temp.png",  (24, 24))
+        IMAGES["battery_temp"] = _load_image("icon_battery_temp.png", (24, 24))
+        IMAGES["engine_temp"]  = _load_image("icon_engine_temp.png",  (24, 24))
         IMAGES["bms"]           = _load_image("icon_bms.png",            (36, 36))
         IMAGES["inverter"]      = _load_image("icon_inverter.png",       (36, 36))
         IMAGES["battery_fault"] = _load_image("icon_battery_fault.png",  (36, 36))
         IMAGES["engine_fault"]  = _load_image("icon_engine_fault.png",   (36, 36))
-        # nome de arquivo conforme você informou: "logo_utforce.png"
-        IMAGES["logo_utforce"]  = _load_image("logo_utforce.png",        (83, 83))
+        IMAGES["logo_utforce"]  = _load_image("logo_utforce.png", (83, 83))
+        IMAGES["chassis"] = _load_image("chassis_f1.png")  # escala será feita no draw
+
     except Exception as e:
         print(f"[renderer] Erro ao carregar assets: {e}. Usando fallbacks.")
         for k, size in {
             "speed_num":96,"soc_title":64,"rpm_num":64,"speed_unit":36,"rpm_unit":24,
             "pedal_letters":24,"lap_num":20,"soc_num":20,"tyre_loc":16,"temp_value":16,
-            "alert_text":16,"lap_title":14,"speed_mode":24,"tyre_info":20,"temp_labels":14
+            "alert_text":16,"lap_title":14,"speed_mode":14,"tyre_info":14,"temp_labels":12
         }.items():
             FONTS[k] = pygame.font.SysFont("Arial", size, bold=True)
 
-# ---------- Utilidades ----------
-def draw_text_with_outline(font, text, fg_color, outline_color, surface, center, ow=2):
-    txt = font.render(text, True, fg_color)
-    out = font.render(text, True, outline_color)
-    rect = txt.get_rect(center=center)
-    for dx in (-ow,0,ow):
-        for dy in (-ow,0,ow):
-            if dx or dy:
-                surface.blit(out, rect.move(dx, dy))
-    surface.blit(txt, rect)
+# ---------- desenhar texto com contorno ----------
+def draw_text_with_outline(font, text, fg_color, outline_color, surface, center, outline_width=2):
+    text_surf = font.render(text, True, fg_color)
+    outline_surf = font.render(text, True, outline_color)
+    rect = text_surf.get_rect(center=center)
+    for dx in [-outline_width, 0, outline_width]:
+        for dy in [-outline_width, 0, outline_width]:
+            if dx != 0 or dy != 0:
+                surface.blit(outline_surf, rect.move(dx, dy))
+    surface.blit(text_surf, rect)
 
-# ---------- Anel RPM (gradiente 25% + preenchimento por rpm) ----------
-def _ring_color_by_fraction(f):
-    # 0-0.25 azul->teal, 0.25-0.5 teal->verde, 0.5-0.75 verde->amarelo, 0.75-1 amarelo->vermelho
-    stops = [
-        (0.00, COLORS["grad_0"]),
-        (0.25, COLORS["grad_25"]),
-        (0.50, COLORS["grad_50"]),
-        (0.75, COLORS["grad_75"]),
-        (1.00, COLORS["grad_100"]),
+# ---------- pílula elíptica (LED RPM/SOC antigo) ----------
+def _draw_gradient_pill(surface, center, rx, ry, color_fn, lit=True):
+    w = int(rx * 2); h = int(ry * 2)
+    pill = pygame.Surface((w, h), pygame.SRCALPHA)
+    if lit:
+        for y in range(h):
+            t = y / max(1, h-1)
+            c = color_fn(t)
+            pygame.draw.line(pill, c, (0, y), (w-1, y))
+    else:
+        pill.fill((60,60,60))
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.ellipse(mask, (255,255,255,255), (0,0,w,h))
+    pill.blit(mask, (0,0), special_flags=pygame.BLEND_RGBA_MULT)
+    rect = pill.get_rect(center=center)
+    surface.blit(pill, rect)
+
+# ---------- RPM bar (pílulas) ----------
+def draw_rpm_bar(surface, data):
+    """
+    Strip de LEDs estilo SVG (916x26) em (54,10).
+    20 elipses com raios e cores idênticos ao SVG fornecido.
+    """
+    # topo-esquerda do canvas dos LEDs
+    ox, oy = 54, 10
+
+    # centros X do SVG (em um canvas de 916 de largura) e raios X específicos
+    # (ry é 13 para todos)
+    cx_list = [
+        16.6081, 62.5997, 109.23, 155.861, 201.852,
+        248.483, 295.113, 341.105, 388.374, 434.365,
+        480.996, 527.626, 573.618, 620.248, 666.879,
+        712.87, 760.139, 806.77, 853.4, 899.392
     ]
-    return _color_from_stops(stops, f)
+    rx_list = [
+        16.6081, 16.6081, 15.9693, 16.6081, 16.6081,
+        15.9693, 16.6081, 16.6081, 16.6081, 16.6081,
+        15.9693, 16.6081, 16.6081, 15.9693, 16.6081,
+        16.6081, 16.6081, 15.9693, 16.6081, 16.6081
+    ]
+    ry = 13
 
-def draw_rpm_ring(surface, rpm_value, rpm_max, center, radius, thickness=16):
-    inner = radius - thickness
-    segments = 64
-    ratio = max(0.0, min(1.0, rpm_value / float(rpm_max)))
-    lit = int(round(segments * ratio))
+    # mapeamento de cor por índice conforme o SVG:
+    # 0–4: azul sólido; 5–9: verde gradiente; 10–14: amarelo gradiente; 15–19: vermelho gradiente
+    def color_fn_for_index(i):
+        if i <= 4:
+            return lambda t: (0x14, 0x66, 0xFF)  # azul sólido
+        if 5 <= i <= 9:
+            return _grad_blue_to_darkgreen
+        if 10 <= i <= 14:
+            return _grad_yellow_to_brown
+        return _grad_red_to_darkred
 
-    phase_deg = 90.0  # 0% começa no BOTTOM (90° em tela pygame)
+    # quantos LEDs acesos (0..20)
+    lit = int(round(20 * max(0.0, min(1.0, data.rpm / 12000.0))))
 
-    for i in range(segments):
-        a0 = i * (360.0 / segments) + phase_deg
-        a1 = (i+1) * (360.0 / segments) + phase_deg
-        color = _ring_color_by_fraction(i / max(segments-1, 1))
-        seg_color = color if i < lit else (60, 60, 60)
+    # desenha
+    for i, (cx, rx) in enumerate(zip(cx_list, rx_list)):
+        cx_abs = int(ox + cx)      # x absoluto no surface
+        cy_abs = oy + ry           # y absoluto no surface
+        _draw_gradient_pill(
+            surface,
+            (cx_abs, cy_abs),
+            rx, ry,
+            color_fn_for_index(i),
+            lit=(i < lit)
+        )
 
-        steps = 6
-        for s in range(steps):
-            ang = math.radians(_lerp(a0, a1, s/steps))
-            x0 = center[0] + inner * math.cos(ang)
-            y0 = center[1] + inner * math.sin(ang)
-            x1 = center[0] + radius * math.cos(ang)
-            y1 = center[1] + radius * math.sin(ang)
-            pygame.draw.line(surface, seg_color, (x0, y0), (x1, y1), 3)
+def draw_rpm_display(surface, data, pos):
+    rect = pygame.Rect(pos, (298, 159))
+    pygame.draw.rect(surface, COLORS["background"], rect, border_radius=15)
+    pygame.draw.rect(surface, (255,0,4), rect, width=2, border_radius=15)
+    draw_text_with_outline(FONTS["rpm_num"], f"{data.rpm}", COLORS["white"], (255,0,4), surface, (rect.centerx, rect.centery - 10))
+    draw_text_with_outline(FONTS["rpm_unit"], "RPM", COLORS["grey"], (255,0,4), surface, (rect.centerx, rect.centery + 45))
 
-# ---------- Blocos ----------
-def draw_rpm_box(surface, rpm, pos=(353,3), size=(298,106)):
-    rect = pygame.Rect(pos, size)
-    pygame.draw.rect(surface, (26,26,26), rect, border_radius=15)
+def draw_speed_display(surface, data, pos):
+    rect = pygame.Rect(pos, (365, 210))
+    pygame.draw.rect(surface, COLORS["background"], rect, border_radius=15)
+    pygame.draw.rect(surface, (255,0,4), rect, width=2, border_radius=15)
+    draw_text_with_outline(FONTS["speed_num"], f"{data.speed}", COLORS["white"], (255,0,4), surface, (rect.centerx, rect.centery - 30))
+    draw_text_with_outline(FONTS["speed_unit"], "Km/h", COLORS["white"], (255,0,4), surface, (rect.centerx, rect.centery + 60))
+    draw_text_with_outline(FONTS["speed_mode"], data.mode, COLORS["grey"], (255,0,4), surface, (rect.centerx, rect.bottom - 25))
+
+# ---------- SOC NOVO (SVG 515x102 em 255,478) ----------
+def _hgrad_fill(surface, rect, stops):
+    """Preenche rect com gradiente horizontal baseado em stops [(pos,color), ...]."""
+    x0 = rect.x
+    for x in range(rect.width):
+        t = x / max(1, rect.width - 1)
+        color = _color_from_stops(stops, t)
+        pygame.draw.line(surface, color, (x0 + x, rect.y), (x0 + x, rect.bottom-1))
+
+def _rounded_rect_mask(size, radius):
+    w, h = size
+    mask = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(mask, (255,255,255,255), (0,0,w,h), border_radius=radius)
+    return mask
+
+def draw_soc(surface, data, pos):
+    # medidas do SVG
+    outer = pygame.Rect(pos, (515, 102))
+
+    # Título "SOC" à esquerda, verticalmente centralizado na metade superior
+    soc_text = FONTS["soc_title"].render("SOC", True, COLORS["white"])
+    # alinhado com a esquerda da caixa e um pequeno offset
+    surface.blit(soc_text, soc_text.get_rect(midleft=(outer.left + 8, outer.top + 30)))
+
+    # Delta kW (sem colisões; encaixado à direita do texto)
+    delta_color = (0,255,0) if data.power_delta >= 0 else (255,0,0)
+    sign = "+" if data.power_delta >= 0 else ""
+    delta_surf = FONTS["soc_num"].render(f"{sign}{data.power_delta:.1f}kW", True, delta_color)
+    surface.blit(delta_surf, delta_surf.get_rect(midleft=(soc_text.get_rect(midleft=(outer.left + 8, outer.top + 30)).right + 10,
+                                                          outer.top + 38)))
+
+    # Barra (parte inferior) — área 517x42, borda vermelha, cantos 11px
+    bar = pygame.Rect(outer.left, outer.bottom - 44, 515, 42)
+    radius = 11
+
+    # fundo escuro + borda
+    pygame.draw.rect(surface, COLORS["background"], bar, border_radius=radius)
+    pygame.draw.rect(surface, (255,0,4), bar, width=2, border_radius=radius)
+
+    # gradiente horizontal como no SVG (vermelho->amarelo->verde)
+    grad_stops = [(0.0, (255,0,0)), (0.394231, (255,217,0)), (1.0, (0x41,0xB6,0x2C))]
+    # superfície do gradiente com máscara arredondada
+    grad = pygame.Surface(bar.size, pygame.SRCALPHA)
+    _hgrad_fill(grad, grad.get_rect(), grad_stops)
+    mask = _rounded_rect_mask(bar.size, radius)
+    grad.blit(mask, (0,0), special_flags=pygame.BLEND_RGBA_MULT)
+
+    # preencher proporcional ao SOC (0..1), mantendo canto esquerdo arredondado
+    ratio = max(0.0, min(1.0, float(data.soc)))
+    fill_w = int(bar.width * ratio)
+    if fill_w > 0:
+        fill_slice = grad.subsurface((0, 0, fill_w, bar.height))
+        surface.blit(fill_slice, bar.topleft)
+
+    # divisórias vermelhas nas mesmas posições do SVG (ajustadas ao retângulo atual)
+    # x relativos do SVG para 515px: [53.391, 104.781, 156.172, 207.563, 258.953, 310.344, 361.735, 413.125, 464.516]
+    ticks = [53.391, 104.781, 156.172, 207.563, 258.953, 310.344, 361.735, 413.125, 464.516]
+    for tx in ticks:
+        x = int(bar.left + tx)
+        pygame.draw.line(surface, (255,0,4), (x, bar.top+1), (x, bar.bottom-1), 1)
+
+def draw_laps(surface, data, pos):
+    rect = pygame.Rect(pos, (150, 200))
+    pygame.draw.rect(surface, COLORS["background"], rect, border_radius=15)
     pygame.draw.rect(surface, COLORS["border_red"], rect, width=2, border_radius=15)
-    draw_text_with_outline(FONTS["rpm_num"], f"{rpm}", COLORS["white"], COLORS["border_red"], surface, (rect.centerx-30, rect.centery-4))
-    draw_text_with_outline(FONTS["rpm_unit"], "RPM", COLORS["white"], COLORS["border_red"], surface, (rect.right-40, rect.centery+22))
-
-def draw_speed_circle(surface, data, pos=(326,115), size=(356,356)):
-    cx, cy = pos[0]+size[0]//2, pos[1]+size[1]//2
-    radius = size[0]//2
-
-    # anel rpm
-    draw_rpm_ring(surface, data.rpm, 12000, (cx,cy), radius)
-
-    # face interna
-    pygame.draw.circle(surface, COLORS["background"], (cx,cy), radius-20)
-
-    # número e unidade com afastamento garantido
-    speed_rect = FONTS["speed_num"].render(str(data.speed), True, COLORS["white"]).get_rect()
-    unit_rect  = FONTS["speed_unit"].render("Km/h", True, COLORS["white"]).get_rect()
-
-    # posiciono primeiro o número, um pouquinho mais à esquerda
-    num_center = (cx-24, cy-10)
-    draw_text_with_outline(FONTS["speed_num"], f"{data.speed}",
-                           COLORS["white"], COLORS["border_red"], surface, num_center)
-
-    # agora posiciono a unidade à direita com folga mínima de 8 px
-    unit_left = (num_center[0] + speed_rect.width//2) + 12
-    unit_center = (max(unit_left + unit_rect.width//2, cx+92), cy+30)
-    draw_text_with_outline(FONTS["speed_unit"], "Km/h",
-                           COLORS["white"], COLORS["border_red"], surface, unit_center)
-
-    # modo
-    draw_text_with_outline(FONTS["speed_mode"],  data.mode,
-                           COLORS["white"], COLORS["border_red"], surface, (cx, cy+80))
-
-
-def draw_laps(surface, data, pos=(28,74), size=(178,206)):
-    rect = pygame.Rect(pos, size)
-    pygame.draw.rect(surface, (26,26,26), rect, border_radius=50)
-    pygame.draw.rect(surface, COLORS["border_red"], rect, width=4, border_radius=50)
-
     y = rect.y + 14
-    line_gap_title = 24
-    line_gap_value = 36
-
     for key, title, color in [
         ("best", "Melhor volta", "text_green"),
         ("previous", "Volta Anterior", "text_yellow"),
         ("current", "Volta Atual", "text_blue"),
     ]:
-        tit = FONTS["lap_title"].render(title, True, COLORS[color])
-        surface.blit(tit, (rect.x + 14, y)); y += line_gap_title
-        val = FONTS["lap_num"].render(data.lap_data[key], True, COLORS["white"])
-        surface.blit(val, (rect.x + 14, y)); y += line_gap_value
+        title_surf = FONTS["lap_title"].render(title, True, COLORS[color])
+        surface.blit(title_surf, (rect.x + 16, y)); y += 24
+        value_surf = FONTS["lap_num"].render(data.lap_data[key], True, COLORS["white"])
+        surface.blit(value_surf, (rect.x + 16, y)); y += 34
+
+# ---------- Temperaturas ----------
+# ---------- Temperaturas (v2 — barras sem ícones, cor por faixa 0/25/50/75/100) ----------
+# cores dos steps (iguais ao SVG)
+TEMP_STEP_COLORS = {
+    0.00: (0x14, 0x66, 0xFF),  # 0%   #1466FF
+    0.25: (0x2B, 0x8E, 0x96),  # 25%  #2B8E96
+    0.50: (0x41, 0xB6, 0x2C),  # 50%  #41B62C
+    0.75: (0xBA, 0xA0, 0x17),  # 75%  #BAA017
+    1.00: (0xFF, 0x00, 0x04),  # 100% #FF0004
+}
+
+def _temp_color_by_pct(p):
+    p = max(0.0, min(1.0, p))
+    if p < 0.25:   return TEMP_STEP_COLORS[0.00]
+    if p < 0.50:   return TEMP_STEP_COLORS[0.25]
+    if p < 0.75:   return TEMP_STEP_COLORS[0.50]
+    if p < 1.00:   return TEMP_STEP_COLORS[0.75]
+    return TEMP_STEP_COLORS[1.00]
+
+def draw_temperature_bar(surface, value, vmin, vmax, topleft, size=(34,138), radius=10,
+                         outline_color=(255,255,255), bg_color=(26,26,26), outline_width=2,
+                         show_ticks=False, show_side_labels=True, min_color=(255,255,255),
+                         max_color=(255,0,4), min_side="left", max_side="right"):
+    import pygame
+    x, y = topleft
+    w, h = size
+    rect = pygame.Rect(x, y, w, h)
+
+    # fundo + contorno
+    pygame.draw.rect(surface, bg_color, rect, border_radius=radius)
+    if outline_width > 0:
+        pygame.draw.rect(surface, outline_color, rect, width=outline_width, border_radius=radius)
+
+    # % preenchida
+    span = max(1e-6, (vmax - vmin))
+    pct  = max(0.0, min(1.0, (value - vmin) / span))
+    fill_h = int((h - outline_width*2) * pct)
+
+    # preenchimento com cor discreta por faixa
+    if fill_h > 0:
+        fill_color = _temp_color_by_pct(pct)
+        fill_surf = pygame.Surface((w - outline_width*2, h - outline_width*2), pygame.SRCALPHA)
+        pygame.draw.rect(fill_surf, fill_color, fill_surf.get_rect(), border_radius=radius-1)
+        mask = pygame.Surface((w - outline_width*2, h - outline_width*2), pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255,255,255,255), mask.get_rect(), border_radius=radius-1)
+        fill_surf.blit(mask, (0,0), special_flags=pygame.BLEND_RGBA_MULT)
+        visible = fill_surf.subsurface((0, (h - outline_width*2) - fill_h, w - outline_width*2, fill_h))
+        surface.blit(visible, (x + outline_width, y + outline_width + (h - outline_width*2) - fill_h))
+
+    # (opcional) linhas internas
+    if show_ticks:
+        for ty in (15, 29, 42, 55, 68):
+            if 0 < ty < h:
+                pygame.draw.line(surface, outline_color, (x+2, y+ty), (x+w-2, y+ty), 1)
+
+    # legendas laterais (mín e máx) — lados configuráveis
+    if show_side_labels:
+        try:
+            min_txt = FONTS["temp_labels"].render(f"{int(vmin)}°C", True, min_color)
+            max_txt = FONTS["temp_labels"].render(f"{int(vmax)}°C", True, max_color)
+        except:
+            font = pygame.font.SysFont("Arial", 12, bold=True)
+            min_txt = font.render(f"{int(vmin)}°C", True, min_color)
+            max_txt = font.render(f"{int(vmax)}°C", True, max_color)
+
+        # posições: mín = base; máx = topo
+        if min_side == "left":
+            surface.blit(min_txt, min_txt.get_rect(midright=(rect.left - 8, rect.bottom - 4)))
+        else:  # right
+            surface.blit(min_txt, min_txt.get_rect(midleft=(rect.right + 8, rect.bottom - 4)))
+
+        if max_side == "left":
+            surface.blit(max_txt, max_txt.get_rect(midright=(rect.left - 8, rect.top + 4)))
+        else:  # right
+            surface.blit(max_txt, max_txt.get_rect(midleft=(rect.right + 8, rect.top + 4)))
 
 
-def draw_soc(surface, data, pos=(342,473), size=(320,110)):
-    """
-    Desenha o bloco SOC (320x110) no estilo do SVG fornecido:
-      - Título "SOC" com contorno vermelho
-      - Delta de potência (kW) alinhado à direita
-      - Barra inferior com gradiente (#FF0000 -> #FFD900 -> #41B62C), raio 11, stroke vermelho 2px
-      - Divisórias verticais vermelhas nas mesmas posições do SVG
-      - Preenchimento até o nível de SOC (data.soc em 0..1)
-    """
+def _draw_top_icon(surface, centerx, top, img, badge=None):
+    """Desenha um ícone acima da barra; se 'badge' for dado, desenha um fundo (ex.: falha)."""
+    import pygame
+    if not img:
+        return
+    icon_rect = img.get_rect(midtop=(centerx, top))
+    if badge:
+        pad = 6
+        brect = icon_rect.inflate(pad*2, pad*2)
+        pygame.draw.rect(surface, badge, brect, border_radius=8)
+    surface.blit(img, icon_rect)
+
+def draw_temperatures_box(surface, data, pos, size=(157,189),
+                          bar_size=(34,138), gap=22,
+                          battery_range=(20,60), engine_range=(20,110),
+                          label_color=(255,255,255)):
+    import pygame
     rect = pygame.Rect(pos, size)
 
-    # ----------------- Cabeçalho -----------------
-    # "SOC" com contorno vermelho (estética dos paths vermelhos do SVG)
-    draw_text_with_outline(
-        FONTS["soc_title"], "SOC",
-        COLORS["white"], COLORS["border_red"],
-        surface, (rect.left + 96, rect.top + 28)
-    )
+    # centraliza as duas barras dentro da caixa
+    total_w = bar_size[0]*2 + gap
+    start_x = rect.centerx - total_w//2
+    y       = rect.top + (rect.height - bar_size[1])//2
 
-    # Delta kW à direita (verde para valores >=0; vermelho caso contrário)
-    sign  = "+" if data.power_delta >= 0 else ""
-    color = COLORS["pedal_green"] if data.power_delta >= 0 else COLORS["pedal_red"]
-    delta_txt = f"{sign}{data.power_delta:.1f}kW"
-    delta_surf = FONTS["soc_num"].render(delta_txt, True, color)
-    surface.blit(delta_surf, delta_surf.get_rect(midright=(rect.right - 10, rect.top + 30)))
+    # escolher ícones: se houver falha, usa o ícone de falha; senão, o ícone “normal”
+    bat_fault = bool(getattr(data, "faults", {}).get("battery", False))
+    eng_fault = bool(getattr(data, "faults", {}).get("engine",  False))
+    bat_icon  = IMAGES.get("battery_fault") if bat_fault else IMAGES.get("battery_temp")
+    eng_icon  = IMAGES.get("engine_fault")  if eng_fault else IMAGES.get("engine_temp")
 
-    # ----------------- Barra inferior -----------------
-    # No SVG: y≈77.75, h≈33.25, rx=11, stroke=#FF0004 (2px)
-    bar_h = 33  # ~ 33.25
-    bar_rect = pygame.Rect(rect.left, rect.bottom - bar_h, rect.width, bar_h)
+    # bateria (esq)
+    bx = start_x
+    _draw_top_icon(surface, centerx=bx + bar_size[0]//2, top=y - 30,
+                   img=bat_icon, badge=(255,0,0) if bat_fault else None)
+    draw_temperature_bar(
+        surface, data.battery_temp, battery_range[0], battery_range[1],
+        (bx, y), size=bar_size, show_ticks=False, show_side_labels=True,
+        min_side="left", max_side="left")
 
-    # Fundo e borda (stroke) com cantos arredondados
-    pygame.draw.rect(surface, COLORS["background"], bar_rect, border_radius=11)
-    pygame.draw.rect(surface, COLORS["border_red"], bar_rect, width=2, border_radius=11)
+    # motor (dir)
+    mx = start_x + bar_size[0] + gap
+    _draw_top_icon(surface, centerx=mx + bar_size[0]//2, top=y - 30,
+                   img=eng_icon, badge=(255,0,0) if eng_fault else None)
+    draw_temperature_bar(
+        surface, data.engine_temp, engine_range[0], engine_range[1],
+        (mx, y), size=bar_size, show_ticks=False, show_side_labels=True,
+        min_side="right", max_side="right")
+    
+    # rótulos pequenos abaixo (opcional)
+    try:
+        b = FONTS["temp_labels"].render("BAT", True, label_color)
+        m = FONTS["temp_labels"].render("MOT", True, label_color)
+        surface.blit(b, b.get_rect(center=(bx + bar_size[0]//2, y + bar_size[1] + 14)))
+        surface.blit(m, m.get_rect(center=(mx + bar_size[0]//2, y + bar_size[1] + 14)))
+    except:
+        pass
 
-    # Gradiente horizontal (como no <linearGradient> do SVG)
-    # stops: 0 -> #FF0000 ; 0.394231 -> #FFD900 ; 1 -> #41B62C
-    grad_w = bar_rect.width - 2
-    grad_h = bar_rect.height - 2
-    if grad_w > 0 and grad_h > 0:
-        grad_surf = pygame.Surface((grad_w, grad_h), pygame.SRCALPHA)
-        for x in range(grad_w):
-            t = x / max(1, grad_w - 1)
-            if t <= 0.394231:
-                u = t / 0.394231
-                c0, c1 = (255, 0, 0), (255, 217, 0)
-            else:
-                u = (t - 0.394231) / (1 - 0.394231)
-                c0, c1 = (255, 217, 0), (0x41, 0xB6, 0x2C)
-            col = (
-                int(c0[0]*(1-u)+c1[0]*u),
-                int(c0[1]*(1-u)+c1[1]*u),
-                int(c0[2]*(1-u)+c1[2]*u),
-            )
-            pygame.draw.line(grad_surf, col, (x, 1), (x, grad_h - 2))
+# ---------- Pedais ----------
+def draw_pedals(surface, data, pos):
+    rect = pygame.Rect(pos, (67, 143))
+    accel_label = FONTS["pedal_letters"].render("A", True, (0,255,0))
+    brake_label = FONTS["pedal_letters"].render("F", True, (255,0,0))
+    surface.blit(accel_label, accel_label.get_rect(centerx=rect.centerx - 15, top=rect.top))
+    surface.blit(brake_label, brake_label.get_rect(centerx=rect.centerx + 15, top=rect.top))
+    bar_width, bar_height = 25, rect.height - 40
+    accel_bar_rect = pygame.Rect(rect.centerx - bar_width - 5, rect.bottom - bar_height, bar_width, bar_height)
+    brake_bar_rect = pygame.Rect(rect.centerx + 5,           rect.bottom - bar_height, bar_width, bar_height)
+    pygame.draw.rect(surface, (60,60,60), accel_bar_rect, border_radius=12)
+    pygame.draw.rect(surface, (60,60,60), brake_bar_rect, border_radius=12)
+    a_h = int(bar_height * (data.accelerator / 100))
+    b_h = int(bar_height * (data.brake / 100))
+    a_fill = pygame.Rect(accel_bar_rect.left, accel_bar_rect.bottom - a_h, bar_width, a_h)
+    b_fill = pygame.Rect(brake_bar_rect.left,  brake_bar_rect.bottom - b_h, bar_width, b_h)
+    pygame.draw.rect(surface, (0,255,0), a_fill, border_radius=12)
+    pygame.draw.rect(surface, (255,0,0),   b_fill, border_radius=12)
 
-        # Máscara para manter o mesmo raio 11 do retângulo
-        mask = pygame.Surface((grad_w, grad_h), pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=11)
-        grad_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+# ---------- Pneus no visual do SVG ----------
+def _state_color_temp(t):
+    if t < 60:     return ( 40, 120, 255)
+    if t < 80:     return (  0, 200,  80)
+    if t < 95:     return (240, 200,  40)
+    return (230,  60,  60)
 
-        # Nível do SOC (0..1) — renderiza só até essa fração
-        level = max(0.0, min(1.0, float(getattr(data, "soc", 0.0))))
-        level_w = int(grad_w * level)
-        if level_w > 0:
-            surface.blit(
-                grad_surf.subsurface((0, 0, level_w, grad_h)),
-                (bar_rect.left + 1, bar_rect.top + 1)
-            )
+def _state_color_pressure(p):
+    if p < 8:      return ( 40, 120, 255)
+    if p <= 12:    return (  0, 200,  80)
+    if p <= 14:    return (240, 200,  40)
+    return (230,  60,  60)
 
-    # ----------------- Divisórias (mesmas do SVG) -----------------
-    # No SVG a barra tem largura útil 322px (x=1..323). As retas estão em:
-    svg_ticks = [33.9321, 65.8641, 97.7961, 129.728, 161.66, 193.592, 225.524, 257.456, 289.388]
-    # Escala para a largura atual de 320px (ret.width), preservando a referência (x-1)
-    scale = (bar_rect.width) / 322.0
-    for tx in svg_ticks:
-        x = int(bar_rect.left + (tx - 1) * scale)
-        # Altura das divisórias no SVG cobre quase toda a barra; aqui deixamos 1px de margem
-        pygame.draw.rect(
-            surface, COLORS["border_red"],
-            pygame.Rect(x, bar_rect.top + 1, 1, bar_rect.height - 2)
-        )
+def _draw_tyre_svg(surface, x, y, w=40, h=82, color=(20,102,255)):
+    rect = pygame.Rect(x, y, w, h)
+    pygame.draw.rect(surface, color, rect, border_radius=5)
+    pygame.draw.rect(surface, COLORS["white"], rect, width=1, border_radius=5)
+    lines = [15.371, 28.5968, 41.8226, 55.0484, 68.2742]
+    for ly in lines:
+        yy = y + int(ly / 82.0 * h)
+        pygame.draw.line(surface, COLORS["white"], (x, yy), (x + w, yy), 1)
 
+def draw_tyres(surface, data, pos):
+    """
+    Desenha a silhueta do carro (PNG) e posiciona os 4 pneus sobre as rodas.
+    >>> PONTOS DE AJUSTE:
+    1) POSIÇÃO DAS RODAS  -> edite o dicionário wheel_uv (coordenadas normalizadas 0..1)
+    2) TAMANHO DAS RODAS  -> edite vis_w e vis_h
+    3) TAMANHO DO PNG     -> edite a margem (margin) ou force um scale_factor
+    """
+    # área do widget (ajuste se quiser deslocar todo o bloco na tela)
+    rect = pygame.Rect(pos, (300, 260))
 
-# ---- Temperaturas (caixa direita superior) ----
-def _draw_temp_gauge(surface, rect, value, vmin, vmax, icon_surf, max_label, min_label="20°"):
-    """Gauge vertical com labels FIXOS nas laterais e preenchimento por valor."""
-    # ícone acima
-    if icon_surf:
-        surface.blit(icon_surf, icon_surf.get_rect(centerx=rect.centerx, top=rect.top - 4))
+    # --- desenha/centraliza o chassis ---
+    car_png = IMAGES.get("chassis")
+    if car_png:
+        iw, ih = car_png.get_size()
 
-    # barra
-    bar_rect = pygame.Rect(rect.x + rect.width // 4, rect.y + 20, rect.width // 2, rect.height - 50)
-    pygame.draw.rect(surface, (40, 40, 40), bar_rect, border_radius=10)
+        # (3) TAMANHO DO PNG ------------- EDITAR AQUI -------------------------
+        margin = 6           # aumenta/diminui margens internas (mais margem = carro menor)
+        scale_factor = 0.5# ex.: 0.90 para reduzir 10%; deixe None para ajustar automático
+        # ----------------------------------------------------------------------
 
-    ratio = max(0.0, min(1.0, (value - vmin) / max(1e-6, (vmax - vmin))))
-    fill_h = int((bar_rect.height - 8) * ratio)
-    fill_rect = pygame.Rect(bar_rect.x + 4, bar_rect.bottom - 4 - fill_h, bar_rect.width - 8, fill_h)
+        sx = (rect.width  - 2*margin) / iw
+        sy = (rect.height - 1.5*margin) / ih
+        s  = min(sx, sy) if scale_factor is None else scale_factor
+        car = pygame.transform.smoothscale(car_png, (int(iw*s), int(ih*s)))
+        car_rect = car.get_rect(center=rect.center)
+        surface.blit(car, car_rect.topleft)
+    else:
+        car_rect = rect  # fallback sem PNG
 
-    # gradiente de baixo (0) para cima (1)
-    for i in range(max(fill_rect.height, 0)):
-        t = i / max(1, fill_rect.height - 1)
-        color = _color_from_stops(TEMP_COLOR_STOPS, t)
-        y = fill_rect.bottom - 1 - i
-        pygame.draw.line(surface, color, (fill_rect.left, y), (fill_rect.right - 1, y))
+    # (1) POSIÇÃO DAS RODAS ------------- EDITAR AQUI --------------------------
+    # Coordenadas normalizadas (u,v): 0..1 na largura/altura do PNG
+    wheel_uv = {
+        "FL": (0.12, 0.22),  # Front-Left
+        "FR": (0.88, 0.22),  # Front-Right
+        "RL": (0.11, 0.92),  # Rear-Left
+        "RR": (0.89, 0.92),  # Rear-Right
+    }
+    # Dica: mude apenas os números; x mais perto de 0 vai para esquerda, de 1 para direita.
+    #       y mais perto de 0 sobe; mais perto de 1 desce.
+    # --------------------------------------------------------------------------
 
-    pygame.draw.rect(surface, (60, 60, 60), bar_rect, width=2, border_radius=10)
+    # (2) TAMANHO DAS RODAS -------------- EDITAR AQUI -------------------------
+    vis_w, vis_h = 33, 60   # largura e altura do "pneu" (a barra azul)
+    # --------------------------------------------------------------------------
 
-    # labels fixos laterais (não mudam)
-    max_s = FONTS["temp_labels"].render(max_label, True, COLORS["temp_red"])
-    surface.blit(max_s, max_s.get_rect(midleft=(bar_rect.right + 14, bar_rect.top + 2)))
-    c_top = FONTS["temp_labels"].render("C", True, COLORS["temp_red"])
-    surface.blit(c_top, c_top.get_rect(midleft=(bar_rect.right + 14, bar_rect.top + 18)))
+    # converte UV -> pixels no surface
+    def uv_to_xy(u, v):
+        return (car_rect.left + int(u * car_rect.width),
+                car_rect.top  + int(v * car_rect.height))
 
-    min_s = FONTS["temp_labels"].render(min_label, True, COLORS["white"])
-    surface.blit(min_s, min_s.get_rect(midright=(bar_rect.left - 14, bar_rect.bottom - 2)))
-    c_bot = FONTS["temp_labels"].render("C", True, COLORS["white"])
-    surface.blit(c_bot, c_bot.get_rect(midright=(bar_rect.left - 14, bar_rect.bottom - 18)))
+    # cria rect de cada pneu já centralizado no ponto da roda
+    tyre_rects = {}
+    for code, (u, v) in wheel_uv.items():
+        cx, cy = uv_to_xy(u, v)
+        r = pygame.Rect(0, 0, vis_w, vis_h)
+        r.center = (cx, cy)
+        tyre_rects[code] = r
 
-def draw_temperatures_box(surface, data, pos=(833,129), size=(157,189)):
-    """Caixa de temperaturas (bateria à esquerda, motor à direita)."""
-    rect = pygame.Rect(pos, (size[0], int(size[1])))
-    # sem borda (mock mostra a caixa "limpa"); se quiser, adicione:
-    # pygame.draw.rect(surface, COLORS["border_red"], rect, width=2, border_radius=15)
+    # --- DESENHA CADA PNEU + textos (sem linhas de ligação) ---
+    for code, r in tyre_rects.items():
+        temp = data.tyre_data[code]['temp']
+        pres = data.tyre_data[code]['pressure']
 
-    left  = pygame.Rect(rect.x, rect.y, rect.width // 2, rect.height)
-    right = pygame.Rect(rect.centerx, rect.y, rect.width // 2, rect.height)
+        # corpo do pneu (a barra colorida com listras)
+        _draw_tyre_svg(surface, r.left, r.top, r.width, r.height, _state_color_temp(temp))
 
-    _draw_temp_gauge(surface, left,  data.battery_temp, 20, 60,  IMAGES.get("battery_temp"), "60°")
-    _draw_temp_gauge(surface, right, data.engine_temp,  20, 110, IMAGES.get("engine_temp"),  "110°")
+        # label (FL/FR/RL/RR) acima
+        loc = FONTS["tyre_loc"].render(code, True, COLORS["white"])
+        surface.blit(loc, loc.get_rect(center=(r.centerx, r.top - 10)))
 
-# ---- Sistema de alertas (caixa esquerda inferior) ----
-def draw_alerts(surface, data, pos=(50,305), size=(133,267)):
-    rect = pygame.Rect(pos, size)
+        # dados (temperatura/pressão) nas laterais
+        t_color = _state_color_temp(temp)
+        p_color = _state_color_pressure(pres)
+        temp_text = FONTS["tyre_info"].render(f"{int(temp)}°C",  True, t_color)
+        pres_text = FONTS["tyre_info"].render(f"{int(pres)}PSI", True, p_color)
+
+        if code in ("FL", "RL"):  # lado esquerdo: textos à esquerda
+            surface.blit(temp_text, temp_text.get_rect(midright=(r.left - 10, r.top + 16)))
+            surface.blit(pres_text, pres_text.get_rect(midright=(r.left - 10, r.top + 36)))
+        else:                     # lado direito: textos à direita
+            surface.blit(temp_text, temp_text.get_rect(midleft=(r.right + 10, r.top + 16)))
+            surface.blit(pres_text, pres_text.get_rect(midleft=(r.right + 10, r.top + 36)))
+
+def draw_alerts(surface, data, pos):
+    rect = pygame.Rect(pos, (194, 134))
     pygame.draw.rect(surface, COLORS["background"], rect, border_radius=15)
-    pygame.draw.rect(surface, COLORS["border_red"], rect, width=2, border_radius=15)
-
-    # 4 slots em grid 2x2
-    cells = [
-        (rect.x + rect.width*0.25, rect.y + rect.height*0.25),
-        (rect.x + rect.width*0.75, rect.y + rect.height*0.25),
-        (rect.x + rect.width*0.25, rect.y + rect.height*0.75),
-        (rect.x + rect.width*0.75, rect.y + rect.height*0.75),
+    pygame.draw.rect(surface, (255,0,4), rect, width=2, border_radius=15)
+    positions = [
+        (rect.centerx - 45, rect.centery - 30),
+        (rect.centerx + 45, rect.centery - 30),
+        (rect.centerx - 45, rect.centery + 30),
+        (rect.centerx + 45, rect.centery + 30),
     ]
     icon_map = {"bms":"bms","inverter":"inverter","battery":"battery_fault","engine":"engine_fault"}
     for i, (name, is_faulty) in enumerate(data.faults.items()):
-        cx, cy = cells[i]
-        badge = pygame.Rect(0,0,56,44); badge.center = (int(cx), int(cy))
-        pygame.draw.rect(surface, (60,60,60) if not is_faulty else COLORS["pedal_red"], badge, border_radius=8)
+        center = positions[i]
         img = IMAGES.get(icon_map.get(name))
         if img:
-            surface.blit(img, img.get_rect(center=badge.center))
+            badge = pygame.Rect(0, 0, 56, 44); badge.center = center
+            pygame.draw.rect(surface, (60,60,60) if not is_faulty else (255,0,0), badge, border_radius=8)
+            surface.blit(img, img.get_rect(center=center))
         else:
-            label = FONTS["alert_text"].render(name.upper(), True, (255,255,255))
-            surface.blit(label, label.get_rect(center=badge.center))
+            label = FONTS["alert_text"].render(name.upper(), True, (255,0,0) if is_faulty else COLORS["grey"])
+            pygame.draw.rect(surface, (60,60,60) if not is_faulty else (255,0,0),
+                             label.get_rect(center=center).inflate(20, 10), border_radius=8)
+            surface.blit(label, label.get_rect(center=center))
 
-# ---- Pneus (barras com stroke branco e linhas internas) ----
-def _tyre_fill_color_by_temp(t):
-    # azul/ideal/quente/extremo
-    if t < 60:     return (0x14, 0x66, 0xFF)  # azul
-    if t < 80:     return (0x41, 0xB6, 0x2C)  # verde
-    if t < 95:     return (0xBA, 0xA0, 0x17)  # amarelo
-    return (0xFF, 0x00, 0x04)                 # vermelho
-
-def draw_tyre_bar(surface, x, y, w=40, h=82, temp=50):
-    """Desenha a barra do pneu como no SVG fornecido."""
-    rect = pygame.Rect(x, y, w, h)
-    # preenchimento pela temperatura
-    pygame.draw.rect(surface, _tyre_fill_color_by_temp(temp), rect, border_radius=5)
-    # stroke branco
-    pygame.draw.rect(surface, COLORS["white"], rect, width=1, border_radius=5)
-    # linhas horizontais internas nas mesmas posições do SVG
-    # (valores absolutos de Y a partir do topo do retângulo)
-    for ly in (15.371, 28.5968, 41.8226, 55.0484, 68.2742):
-        pygame.draw.line(surface, COLORS["white"], (x, y+int(ly)), (x+w, y+int(ly)), 1)
-
-def draw_tyre_data_block(surface, topleft, temp, psi, align="center"):
-    """Bloco 67x69 com textos (20px Orbitron)."""
-    bx, by = topleft
-    w, h = 67, 69
-    # não desenha caixa — apenas textos como no mock
-    t_text = FONTS["tyre_info"].render(f"{int(temp)}°C", True, COLORS["white"])
-    p_text = FONTS["tyre_info"].render(f"{int(psi)}PSI", True, COLORS["white"])
-    cx = bx + w//2
-    surface.blit(t_text, t_text.get_rect(center=(cx, by + 20)))
-    surface.blit(p_text, p_text.get_rect(center=(cx, by + 46)))
-
-def draw_tyres_fixed(surface, data):
-    # FL
-    draw_tyre_bar(surface, 302, 100, 40, 82, data.tyre_data['FL']['temp'])
-    label = FONTS["tyre_loc"].render("FL", True, COLORS["white"])
-    surface.blit(label, label.get_rect(midbottom=(302+20, 100-6)))
-    draw_tyre_data_block(surface, (236, 100), data.tyre_data['FL']['temp'], data.tyre_data['FL']['pressure'])
-
-    # FR
-    draw_tyre_bar(surface, 662, 100, 40, 82, data.tyre_data['FR']['temp'])
-    label = FONTS["tyre_loc"].render("FR", True, COLORS["white"])
-    surface.blit(label, label.get_rect(midbottom=(662+20, 100-6)))
-    draw_tyre_data_block(surface, (709, 106), data.tyre_data['FR']['temp'], data.tyre_data['FR']['pressure'])
-
-    # RL
-    draw_tyre_bar(surface, 302, 430, 40, 82, data.tyre_data['RL']['temp'])
-    label = FONTS["tyre_loc"].render("RL", True, COLORS["white"])
-    surface.blit(label, label.get_rect(midbottom=(302+20, 430-6)))
-    draw_tyre_data_block(surface, (228, 430), data.tyre_data['RL']['temp'], data.tyre_data['RL']['pressure'])
-
-    # RR
-    draw_tyre_bar(surface, 662, 430, 40, 82, data.tyre_data['RR']['temp'])
-    label = FONTS["tyre_loc"].render("RR", True, COLORS["white"])
-    surface.blit(label, label.get_rect(midbottom=(662+20, 430-6)))
-    draw_tyre_data_block(surface, (709, 435), data.tyre_data['RR']['temp'], data.tyre_data['RR']['pressure'])
-
-# ---- Pedais (caixa 94x168 em 833,341) ----
-def draw_pedals_box(surface, data, pos=(833,341), size=(94,168)):
-    rect = pygame.Rect(pos, size)
-    # caixa "limpa" (mock não mostra borda)
-    bar_w = 28
-    bar_h = rect.height - 40
-    # A (acelerador) à esquerda
-    a_rect = pygame.Rect(rect.x + 12, rect.bottom - bar_h, bar_w, bar_h)
-    # F (freio) à direita
-    f_rect = pygame.Rect(rect.right - 12 - bar_w, rect.bottom - bar_h, bar_w, bar_h)
-
-    # rótulos A/F no topo
-    a_lbl = FONTS["pedal_letters"].render("A", True, COLORS["pedal_green"])
-    f_lbl = FONTS["pedal_letters"].render("F", True, COLORS["pedal_red"])
-    surface.blit(a_lbl, a_lbl.get_rect(center=(a_rect.centerx, rect.top + 6)))
-    surface.blit(f_lbl, f_lbl.get_rect(center=(f_rect.centerx, rect.top + 6)))
-
-    # molduras
-    pygame.draw.rect(surface, (60,60,60), a_rect, border_radius=12)
-    pygame.draw.rect(surface, (60,60,60), f_rect, border_radius=12)
-
-    # preenchimentos
-    a_h = int(bar_h * (data.accelerator/100))
-    f_h = int(bar_h * (data.brake/100))
-    pygame.draw.rect(surface, COLORS["pedal_green"], pygame.Rect(a_rect.left, a_rect.bottom - a_h, bar_w, a_h), border_radius=12)
-    pygame.draw.rect(surface, COLORS["pedal_red"],   pygame.Rect(f_rect.left, f_rect.bottom - f_h, bar_w, f_h), border_radius=12)
-
-# ---- RPM box (já implementada acima), Laps (acima), SOC (acima) ----
-
-# ---- Logo ----
-def draw_logo(surface, pos=(919,503)):
+def draw_logo(surface, pos=(919, 503)):
     img = IMAGES.get("logo_utforce")
     if img:
         surface.blit(img, img.get_rect(topleft=pos))
 
-# ---- Função principal de desenho (layout 1024x600 fixo) ----
 def draw_all(surface, data):
     surface.fill(COLORS["background"])
-
-    # Círculo velocidade + anel RPM
-    draw_speed_circle(surface, data, pos=(326,115), size=(356,356))
-
-    # Caixa RPM
-    draw_rpm_box(surface, data.rpm, pos=(353,3), size=(298,106))
-
-    # Voltas
-    draw_laps(surface, data, pos=(28,74), size=(178,206))
-
-    # SOC
-    draw_soc(surface, data, pos=(342,473), size=(320,110))
-
-    # Temperaturas (bateria/motor)
-    draw_temperatures_box(surface, data, pos=(833,129), size=(157,189))
-
-    # Alertas
-    draw_alerts(surface, data, pos=(50,305), size=(133,267))
-
-    # Pneus + blocos de dados
-    draw_tyres_fixed(surface, data)
-
-    # Pedais
-    draw_pedals_box(surface, data, pos=(833,341), size=(94,168))
-
-    # Logo
-    draw_logo(surface, pos=(919,503))
-
+    draw_rpm_bar(surface, data)
+    draw_rpm_display(surface, data, pos=(363, 62))
+    draw_speed_display(surface, data, pos=(329, 237))
+    draw_temperatures_box(surface, data, pos=(738, 110))
+    draw_pedals(surface, data, pos=(919, 156))
+    draw_laps(surface, data, pos=(740, 328))
+    draw_tyres(surface, data, pos=(0, 112))
+    draw_alerts(surface, data, pos=(32, 440))
+    # SOC no exato posicionamento/dimensão do SVG
+    draw_soc(surface, data, pos=(255, 478))
+    draw_logo(surface, pos=(919, 503))
     pygame.display.flip()

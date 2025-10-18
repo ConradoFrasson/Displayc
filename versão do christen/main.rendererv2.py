@@ -1,7 +1,7 @@
 # main.py
 import pygame
 from data_provider import DataProvider
-import rendererv2 as renderer  # versão atualizada do renderer
+import renderer as renderer  # versão atualizada do renderer
 
 SCREEN_WIDTH = 1024
 SCREEN_HEIGHT = 600
