@@ -1,4 +1,3 @@
-# data_provider.py
 import random
 
 class DataProvider:
