@@ -1,5 +1,5 @@
 import pygame
-from data_provider import DataProvider
+from data_provider import data_provider
 import renderer as renderer
 
 SCREEN_WIDTH = 1024
@@ -27,7 +27,7 @@ def main():
     except Exception as e:
         print("[main] ERRO em load_assets:", e)
 
-    data = DataProvider()
+    data = data_provider()
     clock = pygame.time.Clock()
 
     print("[main] pygame display init:", pygame.display.get_init())

@@ -57,3 +57,6 @@ class DataProvider:
         # Simulação de Falhas (mais provável de acontecer)
         if random.random() < 0.005: self.faults["bms"] = not self.faults["bms"]
         if random.random() < 0.005: self.faults["inverter"] = not self.faults["inverter"]
+        
+# Singleton instance
+data_provider = DataProvider()
