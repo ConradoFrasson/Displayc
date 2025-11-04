@@ -27,7 +27,7 @@ def main():
     except Exception as e:
         print("[main] ERRO em load_assets:", e)
 
-    data = data_provider()
+    data = data_provider
     clock = pygame.time.Clock()
 
     print("[main] pygame display init:", pygame.display.get_init())
