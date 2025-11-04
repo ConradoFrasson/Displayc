@@ -11,7 +11,7 @@ def data():
             if hasattr(data_provider, key):
                 setattr(data_provider, key, value)
         return jsonify(data_provider.__dict__)
-    else:  # GET request
+    else:
         return jsonify(data_provider.__dict__)
 
 if __name__ == '__main__':
